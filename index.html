@@ -162,11 +162,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
   }
 
   // ---------- audio ----------
-  var AC=null,master=null,muted=false;
+  // Everything routes through `out`, which the mute button controls.
+  var AC=null,master=null,out=null,muted=false;
   function audio(){
     try{
       AC=new (window.AudioContext||window.webkitAudioContext)();
-      master=AC.createGain();master.gain.value=0;master.connect(AC.destination);
+      out=AC.createGain();out.gain.value=muted?0:1;out.connect(AC.destination);
+      master=AC.createGain();master.gain.value=0;master.connect(out);
       master.gain.linearRampToValueAtTime(.2,AC.currentTime+5);
       var lp=AC.createBiquadFilter();lp.type="lowpass";lp.frequency.value=520;lp.Q.value=.7;lp.connect(master);
       var lfo=AC.createOscillator(),lg=AC.createGain();lfo.frequency.value=.06;lg.gain.value=360;lfo.connect(lg);lg.connect(lp.frequency);lfo.start();
@@ -179,7 +181,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
         o.type="sine";o.frequency.value=f;gn.gain.value=.02;tr.frequency.value=.15+i*.07;tg.gain.value=.014;
         tr.connect(tg);tg.connect(gn.gain);o.connect(gn);gn.connect(master);o.start();tr.start();
       });
-    }catch(e){AC=null}
+    }catch(e){AC=null;out=null}
   }
   function swell(){
     if(!AC||muted)return;
@@ -187,9 +189,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
     o.type="sawtooth";o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(220,t+2.2);
     f.type="lowpass";f.frequency.setValueAtTime(300,t);f.frequency.exponentialRampToValueAtTime(3200,t+2.2);
     gn.gain.setValueAtTime(0,t);gn.gain.linearRampToValueAtTime(.07,t+1.6);gn.gain.exponentialRampToValueAtTime(.001,t+3.6);
-    o.connect(f);f.connect(gn);gn.connect(AC.destination);o.start(t);o.stop(t+3.7);
+    o.connect(f);f.connect(gn);gn.connect(out);o.start(t);o.stop(t+3.7);
     var b=AC.createOscillator(),bg=AC.createGain();b.type="sine";b.frequency.setValueAtTime(70,t);b.frequency.exponentialRampToValueAtTime(38,t+1.4);
-    bg.gain.setValueAtTime(.3,t);bg.gain.exponentialRampToValueAtTime(.001,t+1.8);b.connect(bg);bg.connect(AC.destination);b.start(t);b.stop(t+1.9);
+    bg.gain.setValueAtTime(.3,t);bg.gain.exponentialRampToValueAtTime(.001,t+1.8);b.connect(bg);bg.connect(out);b.start(t);b.stop(t+1.9);
   }
   function sparkle(n){for(var i=0;i<n;i++)(function(i){setTimeout(function(){chime(2+Math.floor(Math.random()*5),.04+Math.random()*.04)},i*(220+Math.random()*260))})(i)}
   var scale=[440,493.9,554.4,659.3,740,880,987.8];
@@ -198,11 +200,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
     var o=AC.createOscillator(),gn=AC.createGain(),t=AC.currentTime;
     o.type="triangle";o.frequency.value=scale[i%scale.length];
     gn.gain.setValueAtTime(0,t);gn.gain.linearRampToValueAtTime(vol||.12,t+.02);gn.gain.exponentialRampToValueAtTime(.001,t+2.6);
-    o.connect(gn);gn.connect(AC.destination);o.start(t);o.stop(t+2.7);
+    o.connect(gn);gn.connect(out);o.start(t);o.stop(t+2.7);
   }
   var mute=document.getElementById("mute");
   mute.addEventListener("click",function(){
-    muted=!muted;if(master)master.gain.value=muted?0:.2;mute.textContent=muted?"Sound off":"Sound on";
+    muted=!muted;
+    if(out&&AC){
+      out.gain.cancelScheduledValues(AC.currentTime);
+      out.gain.setValueAtTime(muted?0:1,AC.currentTime);
+    }
+    mute.textContent=muted?"Sound off":"Sound on";
   });
 
   // ---------- camera ----------
